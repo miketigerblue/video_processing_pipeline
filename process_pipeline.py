@@ -1,6 +1,7 @@
 import os
 import shutil
 import logging
+import subprocess
 from datetime import datetime
 import whisper
 from pyannote.audio import Pipeline
@@ -24,30 +25,56 @@ os.makedirs(SENTIMENT_DIR, exist_ok=True)
 logging.info("Loading Whisper model for transcription.")
 whisper_model = whisper.load_model("base")  # Adjust model size as needed
 
-
 # Initialize PyAnnote model for speaker diarization with authentication
 logging.info("Loading PyAnnote model for speaker diarization.")
 diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization")
 
 def transcribe_video_with_diarization(video_path):
+    # Convert video to audio in .wav format
+    audio_path = video_path.replace(".m4v", ".wav")
+    try:
+        # Extract audio using ffmpeg with explicit settings
+        subprocess.run(
+            f'ffmpeg -i "{video_path}" -ac 1 -ar 16000 -acodec pcm_s16le "{audio_path}"',
+            shell=True, check=True
+        )
+    except subprocess.CalledProcessError:
+        logging.error(f"Failed to extract audio from {video_path}.")
+        return ""
+
     # Step 1: Diarize the audio to detect different speakers
-    logging.info(f"Diarizing video: {video_path}")
-    diarization = diarization_pipeline(video_path)
+    logging.info(f"Diarizing audio: {audio_path}")
+    diarization = diarization_pipeline(audio_path)
     
     # Step 2: Transcribe each segment separately with Whisper and label speakers
     transcription = []
     for turn, _, speaker in diarization.itertracks(yield_label=True):
         start, end = turn.start, turn.end
         # Extract and transcribe the segment
-        segment_audio_path = f"{video_path}_{speaker}.wav"
-        os.system(f"ffmpeg -i {video_path} -ss {start} -to {end} -c copy {segment_audio_path}")
+        segment_audio_path = f"{audio_path}_{speaker}.wav"
         
-        logging.info(f"Transcribing segment for Speaker {speaker} from {start} to {end}.")
-        result = whisper_model.transcribe(segment_audio_path)
-        transcription.append(f"Speaker {speaker}: {result['text']}")
+        try:
+            # Extract audio segment using ffmpeg with explicit settings
+            subprocess.run(
+                f'ffmpeg -i "{audio_path}" -ss {start} -to {end} -ac 1 -ar 16000 -acodec pcm_s16le "{segment_audio_path}"',
+                shell=True, check=True
+            )
+            
+            logging.info(f"Transcribing segment for Speaker {speaker} from {start} to {end}.")
+            result = whisper_model.transcribe(segment_audio_path)
+            transcription.append(f"Speaker {speaker}: {result['text']}")
         
-        # Clean up temporary segment file
-        os.remove(segment_audio_path)
+        except subprocess.CalledProcessError:
+            logging.error(f"Failed to process audio segment for Speaker {speaker} from {start} to {end}. Skipping segment.")
+        
+        finally:
+            # Clean up temporary segment file
+            if os.path.exists(segment_audio_path):
+                os.remove(segment_audio_path)
+    
+    # Clean up main audio file
+    if os.path.exists(audio_path):
+        os.remove(audio_path)
     
     # Combine the transcriptions for all segments
     return "\n".join(transcription)
