@@ -1,0 +1,59 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Python specific
+*.pyc
+*.pyo
+*.pyd
+
+# pip and other dependency files
+*.egg-info/
+.eggs/
+*.egg
+
+# pip caches
+pip-log.txt
+pip-delete-this-directory.txt
+
+# VS Code settings (if using VS Code)
+.vscode/
+
+# macOS Finder attributes
+.DS_Store
+
+# Log files
+*.log
+
+# Environment variables
+.env
+
+# Hugging Face cached models and transformers
+huggingface/
+.huggingface/
+
+# Temporary and cache files
+*.tmp
+*.temp
+*.swp
+.cache/
+__pycache__/
+*.whl
+
+# Temporary folders created for processed videos
+processed_videos/
+
+# Input/Output directories (optional)
+input_videos/
+output_transcripts/
+output_sentiment/
