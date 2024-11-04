@@ -30,14 +30,11 @@ logging.info("Loading PyAnnote model for speaker diarization.")
 diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization")
 
 def transcribe_video_with_diarization(video_path):
-    # Convert video to audio in .wav format
-    audio_path = video_path.replace(".m4v", ".wav")
+    # Convert video to audio in .wav format with a universal approach
+    audio_path = os.path.splitext(video_path)[0] + ".wav"  # Ensures the file name works for both .mp4 and .m4v
     try:
-        # Extract audio using ffmpeg with explicit settings
-        subprocess.run(
-            f'ffmpeg -i "{video_path}" -ac 1 -ar 16000 -acodec pcm_s16le "{audio_path}"',
-            shell=True, check=True
-        )
+        # Extract audio using ffmpeg with -y flag to auto-overwrite
+        subprocess.run(f'ffmpeg -y -i "{video_path}" -ac 1 -ar 16000 "{audio_path}"', shell=True, check=True)
     except subprocess.CalledProcessError:
         logging.error(f"Failed to extract audio from {video_path}.")
         return ""
@@ -52,29 +49,17 @@ def transcribe_video_with_diarization(video_path):
         start, end = turn.start, turn.end
         # Extract and transcribe the segment
         segment_audio_path = f"{audio_path}_{speaker}.wav"
+        os.system(f'ffmpeg -y -i "{audio_path}" -ss {start} -to {end} -c copy "{segment_audio_path}"')
         
-        try:
-            # Extract audio segment using ffmpeg with explicit settings
-            subprocess.run(
-                f'ffmpeg -i "{audio_path}" -ss {start} -to {end} -ac 1 -ar 16000 -acodec pcm_s16le "{segment_audio_path}"',
-                shell=True, check=True
-            )
-            
-            logging.info(f"Transcribing segment for Speaker {speaker} from {start} to {end}.")
-            result = whisper_model.transcribe(segment_audio_path)
-            transcription.append(f"Speaker {speaker}: {result['text']}")
+        logging.info(f"Transcribing segment for Speaker {speaker} from {start} to {end}.")
+        result = whisper_model.transcribe(segment_audio_path)
+        transcription.append(f'Speaker {speaker}: {result["text"]}')
         
-        except subprocess.CalledProcessError:
-            logging.error(f"Failed to process audio segment for Speaker {speaker} from {start} to {end}. Skipping segment.")
-        
-        finally:
-            # Clean up temporary segment file
-            if os.path.exists(segment_audio_path):
-                os.remove(segment_audio_path)
+        # Clean up temporary segment file
+        os.remove(segment_audio_path)
     
     # Clean up main audio file
-    if os.path.exists(audio_path):
-        os.remove(audio_path)
+    os.remove(audio_path)
     
     # Combine the transcriptions for all segments
     return "\n".join(transcription)
