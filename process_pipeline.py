@@ -5,6 +5,8 @@ import subprocess
 from datetime import datetime
 import whisper
 from pyannote.audio import Pipeline
+from pyannote.audio.pipelines.utils.hook import ProgressHook  # Import ProgressHook
+
 from langchain.chains import LLMChain
 from langchain_openai import OpenAI
 from langchain.prompts import PromptTemplate
@@ -27,7 +29,7 @@ whisper_model = whisper.load_model("base")  # Adjust model size as needed
 
 # Initialize PyAnnote model for speaker diarization with authentication
 logging.info("Loading PyAnnote model for speaker diarization.")
-diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization")
+diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
 
 def transcribe_video_with_diarization(video_path):
     # Convert video to audio in .wav format with a universal approach
@@ -41,7 +43,10 @@ def transcribe_video_with_diarization(video_path):
 
     # Step 1: Diarize the audio to detect different speakers
     logging.info(f"Diarizing audio: {audio_path}")
-    diarization = diarization_pipeline(audio_path)
+        # Adding progress hook
+    with ProgressHook() as hook:
+        diarization = diarization_pipeline(audio_path, hook=hook)
+   
     
     # Step 2: Transcribe each segment separately with Whisper and label speakers
     transcription = []
